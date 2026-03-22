@@ -6,19 +6,19 @@ A real-time facial analysis pipeline that detects **emotion**, **ethnicity**, an
 
 ```
 Emotion_Deception_Project/
-├── config.py                  # Central config — paths, labels, thresholds
-├── main.py                    # Entry point — orchestrates all modules
+├── config.py                      # Central config — paths, labels, thresholds
+├── main.py                        # Entry point — orchestrates all modules
 ├── face_module/
-│   └── face_detector.py       # Haar cascade face detection
+│   └── face_detector.py           # Haar cascade face detection
 ├── emotion_module/
-│   ├── emotion_inference.py   # Loads model, predicts emotion
+│   ├── emotion_inference.py       # Loads model, predicts emotion
 │   └── 02_train_emotion_model.py  # Local training script
 ├── deception_module/
-│   └── deception_logic.py     # Rule-based deception scoring
+│   └── deception_logic.py         # Rule-based deception scoring
 ├── ethnicity_module/
-│   └── ethnicity_model.py     # Ethnicity prediction (in progress)
+│   └── ethnicity_model.py         # Ethnicity prediction (in progress)
 ├── visualization/
-│   └── dashboard.py           # Real-time dashboard window
+│   └── dashboard.py               # Real-time dashboard window
 └── notebooks/
     ├── 01_emotion_dataset_preprocessing.ipynb
     └── 02_emotion_model_training.ipynb
@@ -28,31 +28,24 @@ Emotion_Deception_Project/
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/Emotion_Deception_Project.git
+git clone https://github.com/HarshSahu550/Emotion_Deception_Project.git
 cd Emotion_Deception_Project
 ```
 
 ### 2. Create virtual environment
 ```bash
 python -m venv venv
-venv\Scripts\activate      # Windows
-source venv/bin/activate   # Mac/Linux
-```
-
-### 3. Install dependencies
-```bash
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 4. Download model and data files
-Model and data files are NOT in this repo (too large).
-Download from the shared Google Drive folder and place them as:
-```
-models/emotion_model.h5
-data/fer2013_processed.npz
+### 3. Download the model file
+```bash
+pip install gdown
+gdown https://drive.google.com/uc?id=1mM4I3sVYyw-MM-L6-I72Nyo_RFuGxIlM -O models/emotion_model.h5
 ```
 
-### 5. Run
+### 4. Run
 ```bash
 python main.py
 ```
@@ -60,19 +53,18 @@ Press `Q` to quit.
 
 ## Modules
 
-| Module | Owner | Status |
-|--------|-------|--------|
-| emotion_module | [Team1] | Done |
-| face_module | [Team1] | Done |
-| deception_module | [Team1] | Done |
-| ethnicity_module | [Teammate] | In Progress |
-| visualization | [Team1] | Done |
+| Module | Status |
+|--------|--------|
+| emotion_module | Done |
+| face_module | Done |
+| deception_module | Done |
+| ethnicity_module | In Progress |
+| visualization | Done |
 
 ## Dataset
 
 - **FER2013** — 35,887 grayscale 48x48 face images, 7 emotion classes
 - Sourced from Kaggle: `msambare/fer2013`
-- Preprocessing notebook: `notebooks/01_emotion_dataset_preprocessing.ipynb`
 
 ## Model
 
@@ -83,6 +75,6 @@ Press `Q` to quit.
 
 ## Notes
 
-- Model files (.h5) and data files (.npz) are excluded from git — get them from shared Drive
+- Model file is NOT in the repo — use the gdown command above to download it
+- `data/` folder is not needed unless you want to retrain
 - Set `USE_ETHNICITY = True` in `main.py` once ethnicity module is ready
-- Set `USE_DECEPTION = True` in `main.py` once deception module is ready
