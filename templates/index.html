@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FaceSense Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <h1>FaceSense</h1>
+
+  <div class="container">
+
+    <!-- Live video -->
+    <div class="video-box">
+      <img src="/video_feed" alt="Live Feed">
+    </div>
+
+    <!-- Stats panel -->
+    <div class="stats-box">
+
+      <div class="card">
+        <span class="label">Emotion</span>
+        <span class="value" id="emotion">--</span>
+        <span class="sub"   id="confidence">--</span>
+      </div>
+
+      <div class="card">
+        <span class="label">Deception</span>
+        <span class="value" id="deception_label">Analyzing...</span>
+        <span class="sub"   id="deception_score">--</span>
+      </div>
+
+      <!-- Emotion probability bars -->
+      <div class="bars" id="bars"></div>
+
+    </div>
+  </div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

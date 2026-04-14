@@ -11,10 +11,13 @@ from emotion_module.emotion_inference import predict_emotion, predict_emotion_al
 from deception_module.deception_logic import update_and_score, reset
 from visualization.dashboard import Dashboard
 
-# ── Feature flags ──────────────────────────────────────
-USE_ETHNICITY = False
+# ── CHANGED: flip this to True ────────────────────────
+USE_ETHNICITY = True
 
-# ── Bar chart settings ─────────────────────────────────
+# ── NEW: import ethnicity module ──────────────────────
+if USE_ETHNICITY:
+    from ethnicity_module.ethnicity_model import predict_ethnicity
+
 BAR_W  = 200
 BAR_H  = 160
 BAR_PAD = 6
@@ -28,11 +31,12 @@ BAR_COLORS = {
     "Surprise": (0,   165, 255),
 }
 DECEPTION_COLORS = {
-    "Low":        (0,   200, 0  ),
-    "Medium":     (0,   165, 255),
-    "High":       (0,   0,   220),
-    "Analyzing...": (160,160,160),
+    "Low":          (0,   200, 0  ),
+    "Medium":       (0,   165, 255),
+    "High":         (0,   0,   220),
+    "Analyzing...": (160, 160, 160),
 }
+
 
 def draw_label(frame, text, x, y, color=TEXT_COLOR):
     (tw, th), _ = cv2.getTextSize(
@@ -41,6 +45,7 @@ def draw_label(frame, text, x, y, color=TEXT_COLOR):
     cv2.putText(frame, text, (x+2, y),
                 cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE,
                 color, FONT_THICK, cv2.LINE_AA)
+
 
 def draw_emotion_bars(frame, all_probs, origin_x, origin_y):
     panel = frame[origin_y:origin_y+BAR_H, origin_x:origin_x+BAR_W].copy()
@@ -79,6 +84,8 @@ def main():
 
     dashboard = Dashboard()
     print("Running — press Q to quit.")
+    if USE_ETHNICITY:
+        print("[INFO] Ethnicity module ON — make sure Flask API is running on port 3000.")
 
     while True:
         ret, frame = cap.read()
@@ -92,15 +99,26 @@ def main():
         for (x, y, w, h) in faces:
             face_crop = frame[y:y+h, x:x+w]
 
-            emotion, confidence = predict_emotion(face_crop)
-            all_probs           = predict_emotion_all(face_crop)
+            emotion, confidence  = predict_emotion(face_crop)
+            all_probs            = predict_emotion_all(face_crop)
             dec_score, dec_label = update_and_score(all_probs)
+
+            # ── NEW: ethnicity ────────────────────────
+            if USE_ETHNICITY:
+                ethnicity, eth_conf = predict_ethnicity(face_crop)
+            else:
+                ethnicity, eth_conf = None, 0.0
 
             # face box
             cv2.rectangle(frame, (x,y), (x+w,y+h), BOX_COLOR, 2)
 
-            # emotion label
-            draw_label(frame, f"{emotion} {confidence:.0%}", x, y - 34)
+            # emotion label  (y - 58 to make room for two more lines below)
+            draw_label(frame, f"{emotion} {confidence:.0%}", x, y - 58)
+
+            # ── NEW: ethnicity label ──────────────────
+            if USE_ETHNICITY and ethnicity:
+                draw_label(frame, f"Ethnicity: {ethnicity} {eth_conf:.0%}",
+                           x, y - 34)
 
             # deception label
             dec_color = DECEPTION_COLORS.get(dec_label, TEXT_COLOR)
@@ -121,8 +139,6 @@ def main():
             reset()
 
         cv2.imshow("Emotion Detector", frame)
-        cv2.waitKey(1)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
