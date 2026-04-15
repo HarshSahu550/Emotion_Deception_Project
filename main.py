@@ -11,15 +11,15 @@ from emotion_module.emotion_inference import predict_emotion, predict_emotion_al
 from deception_module.deception_logic import update_and_score, reset
 from visualization.dashboard import Dashboard
 
-# ── CHANGED: flip this to True ────────────────────────
+# CHANGED: was False
 USE_ETHNICITY = True
 
-# ── NEW: import ethnicity module ──────────────────────
+# NEW: only import if enabled so pipeline still works without the API
 if USE_ETHNICITY:
     from ethnicity_module.ethnicity_model import predict_ethnicity
 
-BAR_W  = 200
-BAR_H  = 160
+BAR_W   = 200
+BAR_H   = 160
 BAR_PAD = 6
 BAR_COLORS = {
     "Angry":    (0,   0,   220),
@@ -41,16 +41,16 @@ DECEPTION_COLORS = {
 def draw_label(frame, text, x, y, color=TEXT_COLOR):
     (tw, th), _ = cv2.getTextSize(
         text, cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE, FONT_THICK)
-    cv2.rectangle(frame, (x, y-th-6), (x+tw+4, y+2), (0,0,0), -1)
+    cv2.rectangle(frame, (x, y-th-6), (x+tw+4, y+2), (0, 0, 0), -1)
     cv2.putText(frame, text, (x+2, y),
                 cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE,
                 color, FONT_THICK, cv2.LINE_AA)
 
 
 def draw_emotion_bars(frame, all_probs, origin_x, origin_y):
-    panel = frame[origin_y:origin_y+BAR_H, origin_x:origin_x+BAR_W].copy()
+    panel   = frame[origin_y:origin_y+BAR_H, origin_x:origin_x+BAR_W].copy()
     overlay = panel.copy()
-    cv2.rectangle(overlay, (0,0), (BAR_W, BAR_H), (20,20,20), -1)
+    cv2.rectangle(overlay, (0, 0), (BAR_W, BAR_H), (20, 20, 20), -1)
     panel = cv2.addWeighted(overlay, 0.6, panel, 0.4, 0)
 
     n       = len(EMOTION_LABELS)
@@ -63,15 +63,14 @@ def draw_emotion_bars(frame, all_probs, origin_x, origin_y):
         y_mid = y_top + row_h // 2
 
         cv2.putText(panel, emotion[:3], (2, y_mid+4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (200,200,200), 1, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (200, 200, 200), 1, cv2.LINE_AA)
 
         bar_len = int(prob * max_bar)
-        color   = BAR_COLORS.get(emotion, (180,180,180))
-        cv2.rectangle(panel, (38, y_top+2), (38+bar_len, y_top+row_h-2),
-                      color, -1)
+        color   = BAR_COLORS.get(emotion, (180, 180, 180))
+        cv2.rectangle(panel, (38, y_top+2), (38+bar_len, y_top+row_h-2), color, -1)
 
         cv2.putText(panel, f"{prob*100:.0f}%", (38+bar_len+3, y_mid+4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.32, (220,220,220), 1, cv2.LINE_AA)
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.32, (220, 220, 220), 1, cv2.LINE_AA)
 
     frame[origin_y:origin_y+BAR_H, origin_x:origin_x+BAR_W] = panel
 
@@ -84,8 +83,10 @@ def main():
 
     dashboard = Dashboard()
     print("Running — press Q to quit.")
+
+    # NEW: warn early if API isn't running
     if USE_ETHNICITY:
-        print("[INFO] Ethnicity module ON — make sure Flask API is running on port 3000.")
+        print("[INFO] Ethnicity ON — ensure Flask API is running:  python ethnicity_module/app.py")
 
     while True:
         ret, frame = cap.read()
@@ -103,37 +104,37 @@ def main():
             all_probs            = predict_emotion_all(face_crop)
             dec_score, dec_label = update_and_score(all_probs)
 
-            # ── NEW: ethnicity ────────────────────────
+            # NEW: ethnicity inference
             if USE_ETHNICITY:
                 ethnicity, eth_conf = predict_ethnicity(face_crop)
             else:
                 ethnicity, eth_conf = None, 0.0
 
-            # face box
-            cv2.rectangle(frame, (x,y), (x+w,y+h), BOX_COLOR, 2)
+            # face bounding box
+            cv2.rectangle(frame, (x, y), (x+w, y+h), BOX_COLOR, 2)
 
-            # emotion label  (y - 58 to make room for two more lines below)
-            draw_label(frame, f"{emotion} {confidence:.0%}", x, y - 58)
+            # NEW: stack three labels above the box
+            # line 1 — emotion (highest, y-58)
+            draw_label(frame, f"{emotion}  {confidence:.0%}", x, y - 58)
 
-            # ── NEW: ethnicity label ──────────────────
-            if USE_ETHNICITY and ethnicity:
-                draw_label(frame, f"Ethnicity: {ethnicity} {eth_conf:.0%}",
+            # line 2 — ethnicity (middle, y-34)
+            if USE_ETHNICITY and ethnicity and ethnicity != "Unknown":
+                draw_label(frame,
+                           f"Ethnicity: {ethnicity}  {eth_conf:.0%}",
                            x, y - 34)
 
-            # deception label
+            # line 3 — deception (closest to box, y-10)
             dec_color = DECEPTION_COLORS.get(dec_label, TEXT_COLOR)
             draw_label(frame, f"Deception: {dec_label}", x, y - 10, dec_color)
 
-            # bar chart (top-right, first face only)
+            # bar chart — top-right corner, first face only
             if not chart_drawn:
                 cx = fw - BAR_W - 10
                 cy = 10
                 draw_emotion_bars(frame, all_probs, cx, cy)
                 chart_drawn = True
 
-            # update dashboard
-            dashboard.update(all_probs, dec_score, dec_label,
-                             emotion, confidence)
+            dashboard.update(all_probs, dec_score, dec_label, emotion, confidence)
 
         if not faces:
             reset()
