@@ -33,3 +33,7 @@ BOX_COLOR  = (0, 255, 0)
 TEXT_COLOR = (0, 255, 0)
 FONT_SCALE = 0.8
 FONT_THICK = 2
+
+# ── Ethnicity API ──────────────────────────────────────
+ETHNICITY_API_URL  = "http://localhost:3000/predict"
+ETHNICITY_LABELS   = ["White", "Black", "Asian", "Indian", "Others"]
