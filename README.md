@@ -105,8 +105,8 @@ Webcam → Face Detection → Emotion CNN → Deception Scorer → Display
 | `main.py` (full integration) | Harsh Sahu | 23051269 |
 | `deception_module/deception_logic.py` | Vijeta | 23051314 |
 | `visualization/dashboard.py` | Vijeta + Harsh | 23051314, 23051269 |
-| Ethnicity model training | Saurav Kumar | 23051291 |
-| `ethnicity_module/ethnicity_model.py` | Saurav Kumar | 23051291 |
+| Ethnicity model training | Sachin Kumar Arya | 23051291 |
+| `ethnicity_module/ethnicity_model.py` | Sachin Kumar Arya | 23051291 |
 | `ethnicity_module/app.py` (Flask API) | Md. Kamil | 23053344 |
 | Pipeline tests (emotion + deception) | Aadhya Thakre | 23053180 |
 | Ethnicity model tests | Tanya Singh | 23051310 |
