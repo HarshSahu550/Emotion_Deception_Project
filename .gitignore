@@ -30,3 +30,23 @@ Thumbs.db
 # Logs
 *.log
 *.csv
+# IDE / OS junk
+desktop.ini
+tempCodeRunnerFile.py
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+
+# Models (too large for git)
+models/
+*.h5
+*.keras
+*.npz
+
+# Data
+data/
+age_gender.csv
+train/
+test/
+images/

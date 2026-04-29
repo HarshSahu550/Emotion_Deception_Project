@@ -1,0 +1,16 @@
+# Core
+tensorflow==2.15.0
+numpy
+pandas
+scikit-learn
+opencv-python
+
+# Face Detection — replaces Haar cascade
+mediapipe>=0.10.0
+
+# API
+flask>=3.0.0
+
+# Utilities
+gdown
+matplotlib

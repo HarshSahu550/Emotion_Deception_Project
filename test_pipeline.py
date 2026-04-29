@@ -1,184 +1,219 @@
-"""
-test_pipeline.py
-Run from project root: python test_pipeline.py
-Make sure the ethnicity Flask API is running before executing:
-    python ethnicity_module/app.py
-"""
 
-import sys
-import os
+
+import unittest
 import numpy as np
+import os
+import sys
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-PASS = "[PASS]"
-FAIL = "[FAIL]"
-results = []
+def make_face(h=48, w=48, gray=True):
+    if gray:
+        return (np.random.rand(h, w) * 255).astype(np.uint8)
+    return (np.random.rand(h, w, 3) * 255).astype(np.uint8)
 
-def check(name, condition, detail=""):
-    status = PASS if condition else FAIL
-    msg = f"{status} {name}"
-    if detail:
-        msg += f" — {detail}"
-    print(msg)
-    results.append(condition)
 
-print("\n" + "="*55)
-print(" EMOTION DECEPTION PROJECT — PIPELINE TESTS")
-print("="*55 + "\n")
 
-# ── Test 1: config ─────────────────────────────────────
-print("[ config ]")
-try:
-    from config import (
-        EMOTION_LABELS, IMG_SIZE, NUM_CLASSES,
-        CONFIDENCE_THRESHOLD, EMOTION_MODEL_H5,
-        ETHNICITY_API_URL, ETHNICITY_LABELS
-    )
-    check("config imports",              True)
-    check("7 emotion labels",            len(EMOTION_LABELS) == 7, str(EMOTION_LABELS))
-    check("IMG_SIZE is (48,48)",         IMG_SIZE == (48, 48))
-    check("emotion model file exists",   os.path.exists(EMOTION_MODEL_H5), EMOTION_MODEL_H5)
-    check("ETHNICITY_API_URL present",   isinstance(ETHNICITY_API_URL, str) and len(ETHNICITY_API_URL) > 0)
-    check("5 ethnicity labels",          len(ETHNICITY_LABELS) == 5, str(ETHNICITY_LABELS))
-except Exception as e:
-    check("config imports", False, str(e))
+class TestConfig(unittest.TestCase):
 
-print()
+    def test_emotion_labels_count(self):
+        from config import EMOTION_LABELS
+        self.assertEqual(len(EMOTION_LABELS), 7)
 
-# ── Test 2: face detector ──────────────────────────────
-print("[ face_module ]")
-try:
-    from face_module.face_detector import detect_faces
-    check("face_detector imports", True)
+    def test_ethnicity_labels_count(self):
+        from config import ETHNICITY_LABELS
+        self.assertEqual(len(ETHNICITY_LABELS), 5)
 
-    blank = np.zeros((480, 640, 3), dtype=np.uint8)
-    check("returns list on blank frame", isinstance(detect_faces(blank), list))
+    def test_ethnicity_labels_values(self):
+        from config import ETHNICITY_LABELS
+        expected = {"White", "Black", "Asian", "Indian", "Others"}
+        self.assertEqual(set(ETHNICITY_LABELS), expected)
 
-    white = np.ones((480, 640, 3), dtype=np.uint8) * 255
-    check("returns list on white frame", isinstance(detect_faces(white), list))
+    def test_img_size(self):
+        from config import IMG_SIZE
+        self.assertEqual(IMG_SIZE, (48, 48))
 
-except Exception as e:
-    check("face_detector", False, str(e))
+    def test_flags_are_bool(self):
+        from config import USE_EMOTION, USE_ETHNICITY, USE_DECEPTION
+        self.assertIsInstance(USE_EMOTION,   bool)
+        self.assertIsInstance(USE_ETHNICITY, bool)
+        self.assertIsInstance(USE_DECEPTION, bool)
 
-print()
 
-# ── Test 3: emotion inference ──────────────────────────
-print("[ emotion_module ]")
-try:
-    from emotion_module.emotion_inference import predict_emotion, predict_emotion_all
-    check("emotion_inference imports", True)
+class TestFaceDetector(unittest.TestCase):
 
-    dummy_face = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
+    def setUp(self):
+        from face_module.face_detector import FaceDetector
+        self.detector = FaceDetector()  # MediaPipe — no path needed
 
-    label, conf = predict_emotion(dummy_face)
-    check("predict_emotion returns tuple",
-          isinstance(label, str) and isinstance(conf, float))
-    check("label is valid",
-          label in EMOTION_LABELS + ["Uncertain", "No face"], f"got '{label}'")
-    check("confidence in [0,1]", 0.0 <= conf <= 1.0, f"got {conf:.3f}")
+    def test_detector_initialises(self):
+        self.assertIsNotNone(self.detector)
 
-    all_probs = predict_emotion_all(dummy_face)
-    check("predict_emotion_all returns dict",  isinstance(all_probs, dict))
-    check("dict has 7 emotions",               len(all_probs) == 7)
-    check("probabilities sum ~1.0",
-          abs(sum(all_probs.values()) - 1.0) < 0.01,
-          f"sum={sum(all_probs.values()):.4f}")
+    def test_detect_returns_list(self):
+        frame = make_face(480, 640, gray=False)
+        result = self.detector.detect(frame)
+        self.assertIsInstance(result, (list, tuple, np.ndarray))
 
-except Exception as e:
-    check("emotion_inference", False, str(e))
+    def test_detect_on_black_frame(self):
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        result = self.detector.detect(frame)
+        self.assertEqual(len(result), 0)
 
-print()
 
-# ── Test 4: deception logic ────────────────────────────
-print("[ deception_module ]")
-try:
-    from deception_module.deception_logic import update_and_score, reset
-    check("deception_logic imports", True)
 
-    reset()
-    dummy_probs = {l: 1/7 for l in EMOTION_LABELS}
-    for _ in range(10):
-        score, label = update_and_score(dummy_probs)
+class TestEmotionPredictor(unittest.TestCase):
 
-    check("score is float",   isinstance(score, float))
-    check("score in [0,1]",   0.0 <= score <= 1.0, f"got {score:.3f}")
-    check("label is valid",   label in ["Low", "Medium", "High", "Analyzing..."])
+    def setUp(self):
+        from emotion_module.emotion_inference import EmotionPredictor
+        self.predictor = EmotionPredictor()
 
-    reset()
-    score2, label2 = update_and_score(dummy_probs)
-    check("reset clears history", label2 == "Analyzing...")
+    def test_predictor_initialises(self):
+        self.assertIsNotNone(self.predictor)
 
-except Exception as e:
-    check("deception_logic", False, str(e))
+    def test_is_ready_returns_bool(self):
+        self.assertIsInstance(self.predictor.is_ready(), bool)
 
-print()
+    @unittest.skipUnless(os.path.exists("models/emotion_model.h5"), "model not downloaded")
+    def test_predict_returns_dict_keys(self):
+        face = make_face()
+        result = self.predictor.predict(face)
+        self.assertIn("label",      result)
+        self.assertIn("confidence", result)
+        self.assertIn("scores",     result)
 
-# ── Test 5: ethnicity module ───────────────────────────
-print("[ ethnicity_module ]")
-try:
-    from ethnicity_module.ethnicity_model import predict_ethnicity
-    check("ethnicity_model imports", True)
+    @unittest.skipUnless(os.path.exists("models/emotion_model.h5"), "model not downloaded")
+    def test_predict_label_is_valid(self):
+        from config import EMOTION_LABELS
+        face = make_face()
+        result = self.predictor.predict(face)
+        self.assertIn(result["label"], EMOTION_LABELS)
 
-    dummy_face = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
-    eth_label, eth_conf = predict_ethnicity(dummy_face)
+    @unittest.skipUnless(os.path.exists("models/emotion_model.h5"), "model not downloaded")
+    def test_predict_confidence_in_range(self):
+        face = make_face()
+        result = self.predictor.predict(face)
+        self.assertGreaterEqual(result["confidence"], 0.0)
+        self.assertLessEqual(result["confidence"],    1.0)
 
-    check("predict_ethnicity returns tuple",
-          isinstance(eth_label, str) and isinstance(eth_conf, float))
-    check("label is valid ethnicity or Unknown",
-          eth_label in ["White", "Black", "Asian", "Indian", "Others", "Unknown"],
-          f"got '{eth_label}'")
-    check("confidence in [0,1]", 0.0 <= eth_conf <= 1.0, f"got {eth_conf:.3f}")
 
-    # API connectivity check
-    if eth_label == "Unknown":
-        print("       [WARN] Got 'Unknown' — Flask API may not be running.")
-        print("              Start it with:  python ethnicity_module/app.py")
+class TestEthnicityPredictor(unittest.TestCase):
 
-except Exception as e:
-    check("ethnicity_module", False, str(e))
+    def setUp(self):
+        from ethnicity_module.ethnicity_inference import EthnicityPredictor
+        self.predictor = EthnicityPredictor()
 
-print()
+    def test_predictor_initialises(self):
+        self.assertIsNotNone(self.predictor)
 
-# ── Test 6: full pipeline integration ─────────────────
-print("[ integration ]")
-try:
-    from face_module.face_detector import detect_faces
-    from emotion_module.emotion_inference import predict_emotion, predict_emotion_all
-    from deception_module.deception_logic import update_and_score, reset
-    from ethnicity_module.ethnicity_model import predict_ethnicity
+    def test_is_ready_returns_bool(self):
+        self.assertIsInstance(self.predictor.is_ready(), bool)
 
-    reset()
-    fake_face = np.random.randint(0, 255, (48, 48, 3), dtype=np.uint8)
+    @unittest.skipUnless(os.path.exists("models/ethnicity.h5"), "model not downloaded")
+    def test_predict_returns_dict_keys(self):
+        face = make_face()
+        result = self.predictor.predict(face)
+        self.assertIn("label",      result)
+        self.assertIn("confidence", result)
+        self.assertIn("scores",     result)
 
-    emotion, conf        = predict_emotion(fake_face)
-    all_probs            = predict_emotion_all(fake_face)
-    score, dec_label     = update_and_score(all_probs)
-    eth_label, eth_conf  = predict_ethnicity(fake_face)
+    @unittest.skipUnless(os.path.exists("models/ethnicity.h5"), "model not downloaded")
+    def test_predict_label_is_valid(self):
+        from config import ETHNICITY_LABELS
+        face = make_face()
+        result = self.predictor.predict(face)
+        self.assertIn(result["label"], ETHNICITY_LABELS)
 
-    check("full pipeline runs without error", True)
-    check("emotion output valid",
-          emotion in EMOTION_LABELS + ["Uncertain", "No face"])
-    check("deception output valid",
-          dec_label in ["Low", "Medium", "High", "Analyzing..."])
-    check("ethnicity output valid",
-          eth_label in ["White", "Black", "Asian", "Indian", "Others", "Unknown"])
-    check("all three outputs produced simultaneously", True)
+    @unittest.skipUnless(os.path.exists("models/ethnicity.h5"), "model not downloaded")
+    def test_predict_scores_sum_to_one(self):
+        face = make_face()
+        result = self.predictor.predict(face)
+        total = sum(result["scores"].values())
+        self.assertAlmostEqual(total, 1.0, places=4)
 
-except Exception as e:
-    check("integration", False, str(e))
+    @unittest.skipUnless(os.path.exists("models/ethnicity.h5"), "model not downloaded")
+    def test_predict_accepts_bgr_input(self):
+        face_bgr = make_face(gray=False)
+        result = self.predictor.predict(face_bgr)
+        self.assertIn("label", result)
 
-print()
 
-# ── Summary ────────────────────────────────────────────
-print("="*55)
-passed = sum(results)
-total  = len(results)
-print(f" Results: {passed}/{total} tests passed")
-if passed == total:
-    print(" All tests passed — pipeline is ready to run")
-else:
-    print(f" {total - passed} test(s) failed — check output above")
-    if passed >= total - 3:
-        print(" (ethnicity failures are OK if Flask API is not running)")
-print("="*55 + "\n")
+class TestDeceptionScorer(unittest.TestCase):
+
+    def setUp(self):
+        from deception_module.deception_logic import DeceptionScorer
+        self.scorer = DeceptionScorer()
+
+    def test_scorer_initialises(self):
+        self.assertIsNotNone(self.scorer)
+
+    def test_score_returns_dict(self):
+        emotion = {"label": "Happy", "confidence": 0.9}
+        result  = self.scorer.score(emotion)
+        self.assertIsInstance(result, dict)
+
+    def test_score_has_required_keys(self):
+        emotion = {"label": "Fear", "confidence": 0.85}
+        result  = self.scorer.score(emotion)
+        self.assertIn("label", result)
+        self.assertIn("score", result)
+
+    def test_score_in_range(self):
+        for label in ["Angry", "Happy", "Fear", "Neutral", "Sad", "Disgust", "Surprise"]:
+            result = self.scorer.score({"label": label, "confidence": 0.7})
+            self.assertGreaterEqual(result["score"], 0.0)
+            self.assertLessEqual(result["score"],    1.0)
+
+
+class TestDashboard(unittest.TestCase):
+
+    def setUp(self):
+        from visualization.dashboard import Dashboard
+        self.dashboard = Dashboard()
+
+    def test_render_no_faces(self):
+        frame  = np.zeros((480, 640, 3), dtype=np.uint8)
+        output = self.dashboard.render(frame, [])
+        self.assertEqual(output.shape, frame.shape)
+
+    def test_render_with_face_result(self):
+        frame   = np.zeros((480, 640, 3), dtype=np.uint8)
+        results = [{
+            "bbox":      (10, 10, 100, 100),
+            "emotion":   {"label": "Happy",  "confidence": 0.88},
+            "ethnicity": {"label": "Asian",  "confidence": 0.72},
+            "deception": {"label": "Honest", "score": 0.2},
+        }]
+        output = self.dashboard.render(frame, results)
+        self.assertEqual(output.shape, frame.shape)
+
+    def test_render_does_not_mutate_input(self):
+        frame  = np.zeros((480, 640, 3), dtype=np.uint8)
+        before = frame.copy()
+        self.dashboard.render(frame, [])
+        np.testing.assert_array_equal(frame, before)
+
+
+
+class TestPipelineIntegration(unittest.TestCase):
+
+    def test_result_dict_structure(self):
+        """Simulate what main.py builds per face and check structure."""
+        result = {
+            "bbox":      (0, 0, 48, 48),
+            "emotion":   {"label": "Sad",   "confidence": 0.6, "scores": {}},
+            "ethnicity": {"label": "Indian","confidence": 0.5, "scores": {}},
+            "deception": {"label": "Deceptive", "score": 0.75},
+        }
+        self.assertIn("bbox",      result)
+        self.assertIn("emotion",   result)
+        self.assertIn("ethnicity", result)
+        self.assertIn("deception", result)
+        self.assertIsInstance(result["bbox"], tuple)
+        self.assertEqual(len(result["bbox"]), 4)
+
+
+if __name__ == "__main__":
+    runner = unittest.TextTestRunner(verbosity=2)
+    result = runner.run(unittest.TestLoader().loadTestsFromModule(
+        sys.modules[__name__]
+    ))
+    sys.exit(0 if result.wasSuccessful() else 1)

@@ -55,3 +55,12 @@ def predict_emotion_all(face_bgr):
     probs  = scaled / scaled.sum()
 
     return {label: float(p) for label, p in zip(EMOTION_LABELS, probs)}
+
+class EmotionPredictor:
+    def is_ready(self):
+        return _model is not None
+
+    def predict(self, face_bgr):
+        label, confidence = predict_emotion(face_bgr)
+        all_probs = predict_emotion_all(face_bgr)
+        return {"label": label, "confidence": confidence, "scores": all_probs}

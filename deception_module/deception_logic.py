@@ -136,3 +136,14 @@ def update_and_score(all_probs: dict) -> tuple[float, str]:
 
 def reset():
     _analyzer.reset()
+    
+class DeceptionScorer:
+    def score(self, emotion: dict) -> dict:
+        label = emotion.get("label", "Neutral")
+        confidence = emotion.get("confidence", 0.0)
+        # Map single emotion result to a prob dict for the analyzer
+        probs = {e: 0.0 for e in SUPPRESSED_EMOTIONS | MASK_EMOTIONS |
+                 {"Sad", "Surprise", "Happy", "Neutral", "Angry", "Fear", "Disgust"}}
+        probs[label] = confidence
+        score, dec_label = update_and_score(probs)
+        return {"label": dec_label, "score": score}

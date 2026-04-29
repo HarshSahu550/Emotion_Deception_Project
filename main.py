@@ -1,151 +1,93 @@
+
+
 import cv2
-import numpy as np
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import sys
 
 from config import (
-    BOX_COLOR, TEXT_COLOR, FONT_SCALE, FONT_THICK, EMOTION_LABELS
+    USE_EMOTION, USE_ETHNICITY, USE_DECEPTION,
+    MEDIAPIPE_MODEL_SELECTION, MEDIAPIPE_MIN_CONFIDENCE
 )
-from face_module.face_detector import detect_faces
-from emotion_module.emotion_inference import predict_emotion, predict_emotion_all
-from deception_module.deception_logic import update_and_score, reset
-from visualization.dashboard import Dashboard
-
-# CHANGED: was False
-USE_ETHNICITY = True
-
-# NEW: only import if enabled so pipeline still works without the API
+from face_module.face_detector       import FaceDetector
+from emotion_module.emotion_inference   import EmotionPredictor
 if USE_ETHNICITY:
-    from ethnicity_module.ethnicity_model import predict_ethnicity
-
-BAR_W   = 200
-BAR_H   = 160
-BAR_PAD = 6
-BAR_COLORS = {
-    "Angry":    (0,   0,   220),
-    "Disgust":  (0,   140, 0  ),
-    "Fear":     (130, 0,   130),
-    "Happy":    (0,   210, 255),
-    "Neutral":  (160, 160, 160),
-    "Sad":      (200, 100, 0  ),
-    "Surprise": (0,   165, 255),
-}
-DECEPTION_COLORS = {
-    "Low":          (0,   200, 0  ),
-    "Medium":       (0,   165, 255),
-    "High":         (0,   0,   220),
-    "Analyzing...": (160, 160, 160),
-}
-
-
-def draw_label(frame, text, x, y, color=TEXT_COLOR):
-    (tw, th), _ = cv2.getTextSize(
-        text, cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE, FONT_THICK)
-    cv2.rectangle(frame, (x, y-th-6), (x+tw+4, y+2), (0, 0, 0), -1)
-    cv2.putText(frame, text, (x+2, y),
-                cv2.FONT_HERSHEY_SIMPLEX, FONT_SCALE,
-                color, FONT_THICK, cv2.LINE_AA)
-
-
-def draw_emotion_bars(frame, all_probs, origin_x, origin_y):
-    panel   = frame[origin_y:origin_y+BAR_H, origin_x:origin_x+BAR_W].copy()
-    overlay = panel.copy()
-    cv2.rectangle(overlay, (0, 0), (BAR_W, BAR_H), (20, 20, 20), -1)
-    panel = cv2.addWeighted(overlay, 0.6, panel, 0.4, 0)
-
-    n       = len(EMOTION_LABELS)
-    row_h   = (BAR_H - BAR_PAD*2) // n
-    max_bar = BAR_W - 70
-
-    for i, emotion in enumerate(EMOTION_LABELS):
-        prob  = all_probs.get(emotion, 0.0)
-        y_top = BAR_PAD + i * row_h
-        y_mid = y_top + row_h // 2
-
-        cv2.putText(panel, emotion[:3], (2, y_mid+4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.35, (200, 200, 200), 1, cv2.LINE_AA)
-
-        bar_len = int(prob * max_bar)
-        color   = BAR_COLORS.get(emotion, (180, 180, 180))
-        cv2.rectangle(panel, (38, y_top+2), (38+bar_len, y_top+row_h-2), color, -1)
-
-        cv2.putText(panel, f"{prob*100:.0f}%", (38+bar_len+3, y_mid+4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.32, (220, 220, 220), 1, cv2.LINE_AA)
-
-    frame[origin_y:origin_y+BAR_H, origin_x:origin_x+BAR_W] = panel
+    from ethnicity_module.ethnicity_model import EthnicityPredictor
+from deception_module.deception_logic   import DeceptionScorer
+from visualization.dashboard            import Dashboard
 
 
 def main():
+    # ── Initialise modules ────────────────────────────────────────────────
+    print("[main] Initialising pipeline...")
+
+    face_detector = FaceDetector(
+        min_confidence=MEDIAPIPE_MIN_CONFIDENCE,
+        model_selection=MEDIAPIPE_MODEL_SELECTION
+    )
+    dashboard     = Dashboard()
+
+    emotion_predictor   = EmotionPredictor()   if USE_EMOTION    else None
+    ethnicity_predictor = EthnicityPredictor() if USE_ETHNICITY  else None
+    deception_scorer    = DeceptionScorer()    if USE_DECEPTION  else None
+
+    # ── Open webcam ───────────────────────────────────────────────────────
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("[ERROR] Cannot open webcam.")
-        return
+        print("[main] ERROR: Cannot open webcam. Exiting.")
+        sys.exit(1)
 
-    dashboard = Dashboard()
-    print("Running — press Q to quit.")
-
-    # NEW: warn early if API isn't running
-    if USE_ETHNICITY:
-        print("[INFO] Ethnicity ON — ensure Flask API is running:  python ethnicity_module/app.py")
+    print("[main] Pipeline running — press Q to quit.\n")
 
     while True:
         ret, frame = cap.read()
         if not ret:
-            break
+            print("[main] WARNING: Empty frame received.")
+            continue
 
-        faces       = detect_faces(frame)
-        fh, fw      = frame.shape[:2]
-        chart_drawn = False
+        # ── Detect faces ──────────────────────────────────────────────────
+        faces = face_detector.detect(frame)
+
+        results = []
 
         for (x, y, w, h) in faces:
-            face_crop = frame[y:y+h, x:x+w]
+            face_roi = frame[y:y+h, x:x+w]
 
-            emotion, confidence  = predict_emotion(face_crop)
-            all_probs            = predict_emotion_all(face_crop)
-            dec_score, dec_label = update_and_score(all_probs)
+            result = {"bbox": (x, y, w, h)}
 
-            # NEW: ethnicity inference
-            if USE_ETHNICITY:
-                ethnicity, eth_conf = predict_ethnicity(face_crop)
+            # ── Emotion ───────────────────────────────────────────────────
+            if emotion_predictor and emotion_predictor.is_ready():
+                emotion_result = emotion_predictor.predict(face_roi)
+                result["emotion"] = emotion_result
             else:
-                ethnicity, eth_conf = None, 0.0
+                result["emotion"] = {"label": "N/A", "confidence": 0.0}
 
-            # face bounding box
-            cv2.rectangle(frame, (x, y), (x+w, y+h), BOX_COLOR, 2)
+            # ── Ethnicity ─────────────────────────────────────────────────
+            if ethnicity_predictor and ethnicity_predictor.is_ready():
+                ethnicity_result = ethnicity_predictor.predict(face_roi)
+                result["ethnicity"] = ethnicity_result
+            else:
+                result["ethnicity"] = {"label": "N/A", "confidence": 0.0}
 
-            # NEW: stack three labels above the box
-            # line 1 — emotion (highest, y-58)
-            draw_label(frame, f"{emotion}  {confidence:.0%}", x, y - 58)
+            # ── Deception ─────────────────────────────────────────────────
+            if deception_scorer:
+                deception_result = deception_scorer.score(result["emotion"])
+                result["deception"] = deception_result
+            else:
+                result["deception"] = {"label": "N/A", "score": 0.0}
 
-            # line 2 — ethnicity (middle, y-34)
-            if USE_ETHNICITY and ethnicity and ethnicity != "Unknown":
-                draw_label(frame,
-                           f"Ethnicity: {ethnicity}  {eth_conf:.0%}",
-                           x, y - 34)
+            results.append(result)
 
-            # line 3 — deception (closest to box, y-10)
-            dec_color = DECEPTION_COLORS.get(dec_label, TEXT_COLOR)
-            draw_label(frame, f"Deception: {dec_label}", x, y - 10, dec_color)
+        # ── Render dashboard ──────────────────────────────────────────────
+        display_frame = dashboard.render(frame, results)
+        cv2.imshow("Emotion | Ethnicity | Deception", display_frame)
 
-            # bar chart — top-right corner, first face only
-            if not chart_drawn:
-                cx = fw - BAR_W - 10
-                cy = 10
-                draw_emotion_bars(frame, all_probs, cx, cy)
-                chart_drawn = True
-
-            dashboard.update(all_probs, dec_score, dec_label, emotion, confidence)
-
-        if not faces:
-            reset()
-
-        cv2.imshow("Emotion Detector", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("[main] Quit signal received.")
             break
 
     cap.release()
-    dashboard.close()
+    face_detector.close()
     cv2.destroyAllWindows()
+    print("[main] Pipeline stopped.")
 
 
 if __name__ == "__main__":

@@ -41,3 +41,15 @@ def predict_ethnicity(face_bgr: np.ndarray) -> tuple[str, float]:
 
     except Exception:
         return "Unknown", 0.0
+
+class EthnicityPredictor:
+    def is_ready(self):
+        return True  # always ready — delegates to Flask API
+
+    def predict(self, face_bgr: np.ndarray) -> dict:
+        label, confidence = predict_ethnicity(face_bgr)
+        return {
+            "label":      label,
+            "confidence": confidence,
+            "scores":     {}   # API doesn't return per-class scores
+        }

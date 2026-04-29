@@ -8,7 +8,7 @@ import os
 
 app = Flask(__name__)
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "ethnicity.h5")
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ethnicity_module", "ethnicity.h5")
 model = load_model(MODEL_PATH)
 
 ETHNICITY_LABELS = ["White", "Black", "Asian", "Indian", "Others"]
