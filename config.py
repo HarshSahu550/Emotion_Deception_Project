@@ -2,7 +2,7 @@ import os
 
 
 USE_EMOTION    = True
-USE_ETHNICITY  = True   # ← now enabled; set False if model not downloaded yet
+USE_ETHNICITY  = False   # ← now enabled; set False if model not downloaded yet
 USE_DECEPTION  = True
 
 
